@@ -57,11 +57,13 @@ EMBED_BATCH_SIZE: Final[int] = 8
 #: Sleep (in seconds) between embedding batches to avoid rate limits.
 EMBED_SLEEP_SECONDS: Final[float] = 3.0
 
-#: Name of the Cohere embedding model used in the notebook implementation.
+#: Name of the Cohere embedding model (default; preferred for best quality).
 COHERE_EMBED_MODEL_NAME: Final[str] = "embed-multilingual-v3.0"
 
-# You may optionally pin a specific chat model if desired. In the original
-# notebook the default model was used, so we keep this configurable.
+#: HuggingFace BGE model for optional local embeddings (requires sentence-transformers, torch).
+HF_BGE_MODEL_NAME: Final[str] = "BAAI/bge-m3"
+
+#: Chat model used for RAG question answering.
 COHERE_CHAT_MODEL_NAME: Final[str] = "command-r-plus"
 
 # ---------------------------------------------------------------------------

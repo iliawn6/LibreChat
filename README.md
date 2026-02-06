@@ -18,7 +18,7 @@ that answers questions about:
   - `html_scraper.py`: Optional utility to scrape and cache HTML pages from `https://stallman.org`.
   - `preprocessing.py`: Persian text normalization utilities.
   - `splitting.py`: Document splitting into overlapping chunks.
-  - `vector_store.py`: Cohere embeddings and Chroma vector store helpers.
+  - `vector_store.py`: Cohere embeddings (default) and optional local HuggingFace BGE; Chroma vector store helpers.
   - `rag_chain.py`: Retriever, prompt, and LangChain/Cohere RAG chain.
   - `evaluation.py`: Evaluation questions, answer wrapper, and JSON export.
 - `main.py`: Lightweight CLI that runs a small demo using an existing vector store.
@@ -66,13 +66,21 @@ retrieval.
   You can either reuse your existing virtual environment or add these to your
   current `requirements.txt`.
 
-- **Cohere credentials**:
+- **Embedding model**: We **prefer Cohere** for best quality. Set the API key:
 
   ```bash
   export COHERE_API_KEY="your-api-key-here"
   ```
 
-  The embedding and chat models are configured to use Cohere; the key must be
+  **Optional local model**: If you prefer to run embeddings locally (no API key,
+  no rate limits), you can use the HuggingFace BGE-m3 model. Install
+  `sentence-transformers` and `torch`, then pass
+  `vector_store.get_huggingface_embedding_model()` to `build_vector_store` and
+  `load_vector_store`. See the full pipeline example below.
+
+- **Cohere credentials** (for chat model and default embeddings):
+
+  The chat model and default embedding model use Cohere; the key must be
   available in the environment before running the project.
 
 ---
@@ -141,6 +149,25 @@ evaluation.save_answers(answers, "answers.json")
 
 This produces a single `answers.json` file suitable for automatic grading
 or downstream analysis.
+
+**Using the optional local HuggingFace BGE model** (no Cohere API key needed
+for embeddings):
+
+```python
+from librechat_rag import vector_store, rag_chain, evaluation
+
+# Use local BGE embeddings instead of Cohere
+embedding_model = vector_store.get_huggingface_embedding_model()
+vs = vector_store.build_vector_store(splitted_docs, embedding_model=embedding_model)
+# ... or to load an existing collection built with BGE:
+# vs = vector_store.load_vector_store(embedding_model=embedding_model)
+retriever = rag_chain.build_retriever(vs)
+chain = rag_chain.build_rag_chain(retriever)
+# ... rest of pipeline
+```
+
+We prefer Cohere for best quality; the local BGE model is provided as an
+optional alternative when you need to run embeddings without an API key.
 
 ---
 

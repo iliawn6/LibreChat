@@ -4,16 +4,21 @@ Vector store utilities for the LibreChat RAG project.
 This module encapsulates the configuration of the Cohere embedding model and
 the Chroma vector store. It provides helpers to either build a new collection
 from split documents or load an existing one.
+
+**Embedding backends**: Cohere is the default and preferred option. An optional
+local HuggingFace BGE model is available via :func:`get_huggingface_embedding_model`
+for environments where you prefer to run embeddings locally (no API key required).
 """
 
 from __future__ import annotations
 
 import time
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from langchain_cohere import CohereEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 
 from .config import (
     CHROMA_COLLECTION_NAME,
@@ -21,6 +26,7 @@ from .config import (
     COLLECTION_DIR,
     EMBED_BATCH_SIZE,
     EMBED_SLEEP_SECONDS,
+    HF_BGE_MODEL_NAME,
 )
 
 
@@ -39,7 +45,40 @@ def get_embedding_model() -> CohereEmbeddings:
     )
 
 
-def build_vector_store(splitted_docs: Iterable[Document]) -> Chroma:
+def get_huggingface_embedding_model() -> Embeddings:
+    """
+    Create and return the local HuggingFace BGE embedding model.
+
+    This is an **optional** alternative to Cohere for environments where you
+    prefer to run embeddings locally (no API key, no rate limits). Requires
+    ``sentence-transformers`` and ``torch``. Uses GPU if available.
+
+    The model (BAAI/bge-m3) is multilingual and suitable for Persian text.
+    We prefer Cohere for best quality; use this when local execution is needed.
+    """
+
+    try:
+        from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+    except ImportError as e:
+        raise ImportError(
+            "HuggingFace embeddings require langchain-community. "
+            "For local BGE model, also install: sentence-transformers, torch"
+        ) from e
+
+    import torch
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return HuggingFaceBgeEmbeddings(
+        model_name=HF_BGE_MODEL_NAME,
+        model_kwargs={"device": device},
+        encode_kwargs={"normalize_embeddings": True},
+    )
+
+
+def build_vector_store(
+    splitted_docs: Iterable[Document],
+    embedding_model: Optional[Embeddings] = None,
+) -> Chroma:
     """
     Build (or extend) a Chroma vector store from an iterable of split documents.
 
@@ -50,9 +89,13 @@ def build_vector_store(splitted_docs: Iterable[Document]) -> Chroma:
     ----------
     splitted_docs:
         Iterable of document chunks that are ready to be embedded.
+    embedding_model:
+        Embedding model to use. Defaults to Cohere. Pass
+        :func:`get_huggingface_embedding_model` for local BGE embeddings.
     """
 
-    embedding_model = get_embedding_model()
+    if embedding_model is None:
+        embedding_model = get_embedding_model()
     vector_store = Chroma(
         embedding_function=embedding_model,
         collection_name=CHROMA_COLLECTION_NAME,
@@ -77,16 +120,27 @@ def build_vector_store(splitted_docs: Iterable[Document]) -> Chroma:
     return vector_store
 
 
-def load_vector_store() -> Chroma:
+def load_vector_store(
+    embedding_model: Optional[Embeddings] = None,
+) -> Chroma:
     """
     Load an existing Chroma collection without re-adding documents.
 
     This is the preferred entry point when you already have a persisted
     collection on disk created by :func:`build_vector_store` or by another
     ingestion script. It performs no heavy recomputation.
+
+    Parameters
+    ----------
+    embedding_model:
+        Embedding model used when the collection was built. Must match the
+        model used at build time for correct similarity search. Defaults to
+        Cohere. Pass :func:`get_huggingface_embedding_model` if the collection
+        was built with the local BGE model.
     """
 
-    embedding_model = get_embedding_model()
+    if embedding_model is None:
+        embedding_model = get_embedding_model()
     vector_store = Chroma(
         embedding_function=embedding_model,
         collection_name=CHROMA_COLLECTION_NAME,
